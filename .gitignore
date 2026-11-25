@@ -1,1 +1,9 @@
 CLAUDE.local.md
+
+# test reports (build output)
+results.json
+results.xml
+
+# Go cache folders created by Jenkins in the workspace
+.cache/
+.gopath/

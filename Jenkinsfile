@@ -35,12 +35,20 @@ pipeline {
         stage('Test') {
             steps {
                 sh 'go version'
-                sh 'go test ./... -v'
+                // ADDED: install gotestsum (pinned version) into the workspace
+                sh 'go install gotest.tools/gotestsum@v1.13.0'
+                // ADDED: run tests with gotestsum, write a JSON file and a JUnit XML file
+                sh '$GOPATH/bin/gotestsum --jsonfile results.json --junitfile results.xml -- ./... -v'
             }
         }
     }
 
     post {
+        // ADDED: always publish reports, even when tests fail
+        always {
+            junit allowEmptyResults: true, testResults: 'results.xml'
+            archiveArtifacts artifacts: 'results.json,results.xml', allowEmptyArchive: true
+        }
         success { echo 'Tests passed' }
         failure { echo 'Tests failed - check the console output' }
     }
