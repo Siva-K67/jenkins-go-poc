@@ -29,8 +29,13 @@ func baseURL(t *testing.T) string {
 	return u
 }
 
+// stepDelay slows every request down on purpose, so that a test stays in the
+// RUNNING state long enough to watch it live (PoC Task 6). Set it to 0 to remove.
+const stepDelay = 2 * time.Second
+
 func do(t *testing.T, method, url string, body any) *http.Response {
 	t.Helper()
+	time.Sleep(stepDelay)
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
