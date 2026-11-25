@@ -35,8 +35,9 @@ pipeline {
         stage('Test') {
             steps {
                 sh 'go version'
-                // ADDED: install gotestsum (pinned version) into the workspace
-                sh 'go install gotest.tools/gotestsum@v1.13.0'
+                // ADDED: install gotestsum into the workspace.
+                // Pinned to v1.12.3 because newer versions need Go 1.24+ and this image is Go 1.23.
+                sh 'go install gotest.tools/gotestsum@v1.12.3'
                 // ADDED: run tests with gotestsum, write a JSON file and a JUnit XML file
                 sh '$GOPATH/bin/gotestsum --jsonfile results.json --junitfile results.xml -- ./... -v'
             }
