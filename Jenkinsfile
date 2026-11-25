@@ -41,8 +41,10 @@ pipeline {
                 // ADDED: run tests with gotestsum, write a JSON file and a JUnit XML file
                 // -count=1 turns off Go's test cache, so tests really run (and hit the server) every build
                 // --format standard-verbose prints the "=== RUN" and "--- PASS" lines live in the console,
-                // so the console log can be read while the build runs (PoC Task 6)
-                sh '$GOPATH/bin/gotestsum --format standard-verbose --jsonfile results.json --junitfile results.xml -- ./... -v -count=1'
+                // so the console log can be read while the build runs (PoC Task 6).
+                // Do NOT add -v here: gotestsum already runs go test -json, and an extra -v makes Go
+                // hold back subtest results until the parent test ends (they would not be live).
+                sh '$GOPATH/bin/gotestsum --format standard-verbose --jsonfile results.json --junitfile results.xml -- ./... -count=1'
             }
         }
     }
