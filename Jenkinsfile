@@ -17,7 +17,7 @@ pipeline {
         GOCACHE = "${WORKSPACE}/.cache/go-build"
         GOPATH  = "${WORKSPACE}/.gopath"
         // ADDED: pass the input to the Go tests as an env var
-        INSTANCE_URL = "${params.INSTANCE_URL}"
+        AIP_INSTANCE_URL = "${params.INSTANCE_URL}"
     }
 
     stages {
@@ -29,7 +29,7 @@ pipeline {
                         error('INSTANCE_URL is empty')
                     }
                 }
-                sh 'echo "Testing against: $INSTANCE_URL"'
+                sh 'echo "Testing against: $AIP_INSTANCE_URL"'
             }
         }
         stage('Test') {
