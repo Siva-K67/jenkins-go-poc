@@ -32,8 +32,9 @@ A future **Testing Server** will take a request like `{"instance_url": "https://
 | 4 | Run the tests with gotestsum and produce JSON reports | Met | `results.json` and `results.xml` are published with every build. gotestsum is pinned to `v1.12.3`, because newer versions need Go 1.24 and the container has Go 1.23. |
 | 5 | Get job status and each test's result through APIs | Met | Status: queued (queue item has no `executable`), running (`building: true`), done (`result` is SUCCESS, FAILURE or ABORTED). Results: `testReport/api/json` or the `results.json` file. Both are available only after the build ends. The Testing Server must remember the queue ticket and build number for each request. |
 | 6 | See each test's status while the tests are still running | Met, with limits | Read the console log with `/logText/progressiveText` and parse the `=== RUN` and `--- PASS` lines. It is text, not JSON, so something has to parse it. The first test line shows about 8 seconds after the trigger. Do not add `-v` to the test command, or Go holds back subtest results until the end. |
-| 7 | Handle failures | Mostly met | Tested: Jenkins down, target server down, wrong login, stopped build, stuck build (timeout), tool version mismatch. Not tested: Jenkins starting up, many runs at once. |
+| 7 | Handle failures | Met | Tested: Jenkins down, target server down, wrong login, stopped build, stuck build (timeout), tool version mismatch, Jenkins starting up, and many runs at once. See section 5 for what we saw. |
 | 8 | Keep the runner replaceable | Partly met | The tests only need one environment variable and know nothing about Jenkins. We have not proven it with a second runner. |
+
 
 ## 4. How to run the demo
 
@@ -239,11 +240,15 @@ curl.exe -i -G -X POST -u $auth --data-urlencode "INPUT_JSON@$env:TEMP\input.jso
 
 - **Track each request.** Store the queue ticket and the build number for every request. The queue ticket is the only safe link between a request and its build.
 - **Live status comes from the console log.** Jenkins has no JSON API for it. The log is text, with hidden `ha:////...` markers that a parser must remove. The `results.json` and `results.xml` files can only be downloaded after the build ends.
+- **Jenkins does not push results.** It only answers when asked, so the Testing Server pulls the results after the build ends. Pushing the JSON from a `Jenkinsfile` step is possible, but we did not test it.
 - **Do not add `-v`** to the gotestsum command. It delays subtest results until the parent test ends.
 - **Parent tests and subtests** are counted separately in Jenkins' test report.
 - **Secrets:** use a password parameter or the Jenkins credentials store. Plain parameters, including a JSON string, are readable through the API.
 - **Time limits:** a stuck build stops only if a timeout is set. The Testing Server should also have its own time limit, and treat a failed connection to Jenkins as "runner unavailable".
 - **A stopped build and a timeout both end as `ABORTED`.** Only the console log tells them apart.
+- **Many runs at once work.** We sent 5 different requests together. All were accepted, waited in the queue, and ended `SUCCESS`. They did not disturb each other. This machine has 2 build slots, so most runs wait their turn. Jenkins still counts a waiting build as "building".
+- **Identical requests are merged.** Three identical requests sent together all got the same queue ticket, so they became one build. The Testing Server must put a **unique value** in every request, such as a run ID in `ENVIRONMENT`. Then two requests never look the same. Merging happens only while a request is waiting in the queue.
+- **Jenkins starting up needs retries.** After a restart, triggers got `500`, then `503`, then `403`, and then `201` after about 12 seconds. A `403` right after a restart does not always mean a wrong login. The Testing Server should retry for about 30 seconds before it reports "bad login". It should also use a request timeout, because one request was held for about 9 seconds during startup. Retrying a trigger after a timeout can start a second build unless the request has a unique run ID. The retry rule is our advice. We tested only what Jenkins answers, not a retry loop.
 - **Keep the runner replaceable:** the Testing Server should talk to a small runner interface, with Jenkins as one implementation. The tests need only the environment variables.
 
 ## 6. Repo layout
