@@ -3,6 +3,11 @@ pipeline {
         docker { image 'golang:1.23' }
     }
 
+    // ADDED: stop a stuck build. Jenkins aborts it after 2 minutes (a normal run takes about 20 seconds).
+    options {
+        timeout(time: 2, unit: 'MINUTES')
+    }
+
     // ADDED: an input that the caller can send when starting the job
     parameters {
         string(
@@ -10,6 +15,13 @@ pipeline {
             defaultValue: 'http://host.docker.internal:8081',
             description: 'Base URL of the server to test'
         )
+        // ADDED (PoC): more inputs, to test how several fields and a secret travel
+        string(name: 'ENVIRONMENT', defaultValue: '', description: 'Optional: environment name')
+        string(name: 'CLIENT_ID', defaultValue: '', description: 'Optional: client id')
+        password(name: 'CLIENT_SECRET', defaultValue: '', description: 'Optional: client secret (PoC: test value only)')
+        string(name: 'INPUT_JSON', defaultValue: '', description: 'Optional: the whole input as one JSON string')
+        // ADDED (PoC): makes one test sleep, to simulate a stuck build
+        booleanParam(name: 'SIMULATE_HANG', defaultValue: false, description: 'PoC: simulate a stuck build')
     }
 
     environment {
@@ -18,6 +30,12 @@ pipeline {
         GOPATH  = "${WORKSPACE}/.gopath"
         // ADDED: pass the input to the Go tests as an env var
         AIP_INSTANCE_URL = "${params.INSTANCE_URL}"
+        // ADDED (PoC): the extra inputs, also as env vars
+        AIP_ENVIRONMENT   = "${params.ENVIRONMENT}"
+        AIP_CLIENT_ID     = "${params.CLIENT_ID}"
+        AIP_CLIENT_SECRET = "${params.CLIENT_SECRET}"
+        AIP_INPUT_JSON    = "${params.INPUT_JSON}"
+        AIP_SIMULATE_HANG = "${params.SIMULATE_HANG}"
     }
 
     stages {
