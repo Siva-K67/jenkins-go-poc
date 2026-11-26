@@ -41,6 +41,8 @@ func main() {
 	flag.StringVar(&cfg.Job, "job", "go-test-poc", "Jenkins job name")
 	flag.IntVar(&cfg.Build, "build", 0, "build number (0 = latest build)")
 	flag.DurationVar(&cfg.Interval, "interval", 2*time.Second, "how often to read the log")
+	serveMode := flag.Bool("serve", false, "show a live web page instead of printing in the terminal")
+	addr := flag.String("addr", "127.0.0.1:9000", "address of the web page (used with -serve)")
 	flag.Parse()
 	cfg.User = os.Getenv("JENKINS_USER")
 	cfg.Token = os.Getenv("JENKINS_TOKEN")
@@ -51,6 +53,13 @@ func main() {
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
+	if *serveMode {
+		if err := serve(client, cfg, *addr, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(2)
+		}
+		return
+	}
 	failed, err := watch(client, cfg, os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -140,31 +149,41 @@ func watch(client *http.Client, cfg config, out io.Writer) (int, error) {
 	fmt.Fprintf(out, "Watching %s build #%d\n\n", cfg.Job, build)
 
 	tr := newTracker()
+	err := follow(client, cfg, build, func(chunk string) {
+		for _, e := range tr.Feed(chunk) {
+			fmt.Fprintf(out, "%s  %-8s %s\n", time.Now().Format("15:04:05"), e.Status, e.Name)
+		}
+	})
+	if err != nil {
+		return 0, err
+	}
+	return tr.Summary(out), nil
+}
+
+// follow reads a build's console log piece by piece and passes each piece to handle.
+// It returns when Jenkins says the log is complete (the build is over).
+func follow(client *http.Client, cfg config, build int, handle func(chunk string)) error {
 	offset := 0
 	for {
 		path := fmt.Sprintf("/job/%s/%d/logText/progressiveText?start=%d", cfg.Job, build, offset)
 		resp, err := getRetry(client, cfg, path)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			return 0, err
+			return err
 		}
-
-		for _, e := range tr.Feed(string(body)) {
-			fmt.Fprintf(out, "%s  %-8s %s\n", time.Now().Format("15:04:05"), e.Status, e.Name)
-		}
+		handle(string(body))
 
 		// Jenkins tells us where to continue, and whether more log is still coming.
 		if next, err := strconv.Atoi(resp.Header.Get("X-Text-Size")); err == nil {
 			offset = next
 		}
 		if resp.Header.Get("X-More-Data") != "true" {
-			break
+			return nil
 		}
 		time.Sleep(cfg.Interval)
 	}
-	return tr.Summary(out), nil
 }

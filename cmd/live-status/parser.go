@@ -26,9 +26,9 @@ const (
 
 // Event is one change in a test's status.
 type Event struct {
-	Name     string
-	Status   string
-	Duration string
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	Duration string `json:"duration,omitempty"`
 }
 
 // tracker turns console log text into test statuses.
@@ -75,6 +75,15 @@ func (t *tracker) set(name, status, duration string) Event {
 		e.Duration = duration
 	}
 	return *e
+}
+
+// Snapshot returns every test seen so far, in the order it first appeared.
+func (t *tracker) Snapshot() []Event {
+	out := make([]Event, 0, len(t.order))
+	for _, name := range t.order {
+		out = append(out, *t.tests[name])
+	}
+	return out
 }
 
 // Summary prints a table of every test and returns how many failed.
